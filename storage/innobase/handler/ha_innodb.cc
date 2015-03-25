@@ -199,9 +199,10 @@ static char*	innobase_disable_monitor_counter	= NULL;
 static char*	innobase_reset_monitor_counter		= NULL;
 static char*	innobase_reset_all_monitor_counter	= NULL;
 
+static char*	innobase_influxdb_host = NULL;
 static char*	innobase_influxdb_database = NULL;
 static char*	innobase_influxdb_user     = NULL;
-static char*	innobase_influxdb_password = NULL;
+static char*	innobase_influxdb_password = "";
 
 /* The highest file format being used in the database. The value can be
 set by user, however, it will be adjusted to the newer file format if
@@ -3316,12 +3317,13 @@ innobase_init(
 		goto error;
 	}
 #endif /* DBUG_OFF */
-    if (innobase_influxdb_database) {
+    if (innobase_influxdb_database && innobase_influxdb_user
+            && innobase_influxdb_host) {
         fprintf(stderr, "InfluxDB: connecting to [%s, %s, %s]\n",
                 innobase_influxdb_database,
                 innobase_influxdb_user,
                 innobase_influxdb_password);
-        s_influxdb_client *client = influxdb_client_new("localhost:8086",
+        s_influxdb_client *client = influxdb_client_new(innobase_influxdb_host,
                 innobase_influxdb_user, innobase_influxdb_password,
                 innobase_influxdb_database, 0);
         s_influxdb_series *series = influxdb_series_create("my_metrics", NULL);
@@ -19294,9 +19296,13 @@ static MYSQL_SYSVAR_ULONG(saved_page_number_debug,
   NULL, innodb_save_page_no, 0, 0, UINT_MAX32, 0);
 #endif /* UNIV_DEBUG */
 
+static MYSQL_SYSVAR_STR(influxdb_host, innobase_influxdb_host,
+  PLUGIN_VAR_READONLY,
+  "The machine and port running InfluxDb.",
+  NULL, NULL, NULL);
 static MYSQL_SYSVAR_STR(influxdb_database, innobase_influxdb_database,
   PLUGIN_VAR_READONLY,
-  "The name of the InfluxDb database to create.",
+  "The name of the InfluxDb database to connect to.",
   NULL, NULL, NULL);
 static MYSQL_SYSVAR_STR(influxdb_user, innobase_influxdb_user,
   PLUGIN_VAR_READONLY,
@@ -19530,6 +19536,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(corrupt_table_action),
   MYSQL_SYSVAR(fake_changes),
   MYSQL_SYSVAR(locking_fake_changes),
+  MYSQL_SYSVAR(influxdb_host),
   MYSQL_SYSVAR(influxdb_database),
   MYSQL_SYSVAR(influxdb_user),
   MYSQL_SYSVAR(influxdb_password),
