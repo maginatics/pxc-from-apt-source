@@ -2830,11 +2830,6 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 			/*!< in: a dummy parameter required by
 			os_thread_create */
 {
-	fprintf(stderr, "InfluxDB: creating database\n");
-    s_influxdb_client *client = influxdb_client_new("localhost:8086", "root", "", "", 0);
-    int status = influxdb_create_database(client, "toto");
-	fprintf(stderr, "InfluxDB: create status %d\n", status);
-    influxdb_client_free(client);
 
 	ulint	next_loop_time = ut_time_ms() + 1000;
 	ulint	lru_sleep_time = srv_cleaner_max_lru_time;
