@@ -81,7 +81,8 @@ in thrashing. */
 /* @} */
 
 s_influxdb_client *client;
-s_influxdb_series *series;
+s_influxdb_series *influxdb_aggregate_series;
+s_influxdb_series *influxdb_page_level_series;
 
 /** Handled page counters for a single flush */
 struct flush_counters_t {
@@ -1523,6 +1524,16 @@ buf_flush_LRU_list_batch(
 	ulint		free_len = UT_LIST_GET_LEN(buf_pool->free);
 	ulint		lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
 
+    char space[25];
+    char offset[25];
+    char oldest_modification[25];
+    char newest_modification[25];
+    char *influx_data[4];
+    influx_data[0] = space;
+    influx_data[1] = offset;
+    influx_data[2] = oldest_modification;
+    influx_data[3] = newest_modification;
+
 	n->flushed = 0;
 	n->evicted = 0;
 	n->unzip_LRU_evicted = 0;
@@ -1571,6 +1582,15 @@ buf_flush_LRU_list_batch(
 		if (evict) {
 
 			if (buf_LRU_free_page(bpage, true)) {
+                sprintf(space, "%u", bpage->space);
+                sprintf(offset, "%u", bpage->offset);
+                sprintf(oldest_modification, "%lu", bpage->oldest_modification);
+                sprintf(newest_modification, "%lu", bpage->newest_modification);
+                influxdb_series_add_points(influxdb_aggregate_series, influx_data);
+                int status = influxdb_write_serie(client, influxdb_page_level_series);
+                if (status != 200) {
+                    fprintf(stderr, "InfluxDB: write failed with %d\n", status);
+                }
 
 				mutex_exit(block_mutex);
 				n->evicted++;
@@ -2235,10 +2255,10 @@ buf_flush_LRU_tail(void)
 	ulint	lru_chunk_size = srv_cleaner_lru_chunk_size;
 	ulint	free_list_lwm = srv_LRU_scan_depth / 100
 		* srv_cleaner_free_list_lwm;
-    char pool_id[10];
-    char num_flushed[10];
-    char num_evicted[10];
-    char *influx_data[2];
+    char pool_id[25];
+    char num_flushed[25];
+    char num_evicted[25];
+    char *influx_data[3];
     influx_data[0] = pool_id;
     influx_data[1] = num_flushed;
     influx_data[2] = num_evicted;
@@ -2293,8 +2313,8 @@ buf_flush_LRU_tail(void)
                     sprintf(pool_id, "%lu", i);
                     sprintf(num_flushed, "%lu", n.flushed);
                     sprintf(num_evicted, "%lu", n.evicted);
-                    influxdb_series_add_points(series, influx_data);
-                    int status = influxdb_write_serie(client, series);
+                    influxdb_series_add_points(influxdb_aggregate_series, influx_data);
+                    int status = influxdb_write_serie(client, influxdb_aggregate_series);
                     if (status != 200) {
                         fprintf(stderr, "InfluxDB: write failed with %d\n", status);
                     }
@@ -2875,10 +2895,16 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
     client = influxdb_client_new(srv_influxdb_host,
             srv_influxdb_user, srv_influxdb_password,
             srv_influxdb_database, 0);
-    series = influxdb_series_create("buf0flu", NULL);
-    influxdb_series_add_colums(series, "pool");
-    influxdb_series_add_colums(series, "flushed");
-    influxdb_series_add_colums(series, "evicted");
+    influxdb_aggregate_series = influxdb_series_create("total_flushed", NULL);
+    influxdb_series_add_colums(influxdb_aggregate_series, "pool");
+    influxdb_series_add_colums(influxdb_aggregate_series, "flushed");
+    influxdb_series_add_colums(influxdb_aggregate_series, "evicted");
+
+    influxdb_page_level_series = influxdb_series_create("pages_flushed", NULL);
+    influxdb_series_add_colums(influxdb_page_level_series, "space");
+    influxdb_series_add_colums(influxdb_page_level_series, "offset");
+    influxdb_series_add_colums(influxdb_page_level_series, "oldest_modification");
+    influxdb_series_add_colums(influxdb_page_level_series, "newest_modification");
 
 	/* On server shutdown, the LRU manager thread runs through cleanup
 	phase to provide free pages for the master and purge threads.  */
@@ -2907,7 +2933,8 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 		}
 	}
 
-    influxdb_series_free(series, NULL);
+    influxdb_series_free(influxdb_aggregate_series, NULL);
+    influxdb_series_free(influxdb_page_level_series, NULL);
     influxdb_client_free(client);
 
 	buf_lru_manager_is_active = false;
