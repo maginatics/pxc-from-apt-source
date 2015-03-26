@@ -3319,33 +3319,15 @@ innobase_init(
 #endif /* DBUG_OFF */
     if (innobase_influxdb_database && innobase_influxdb_user
             && innobase_influxdb_host) {
-        fprintf(stderr, "InfluxDB: connecting to [%s, %s, %s]\n",
+        fprintf(stderr, "InfluxDB: connecting to [%s, %s, %s, %s]\n",
+                innobase_influxdb_host,
                 innobase_influxdb_database,
                 innobase_influxdb_user,
                 innobase_influxdb_password);
-        s_influxdb_client *client = influxdb_client_new(innobase_influxdb_host,
-                innobase_influxdb_user, innobase_influxdb_password,
-                innobase_influxdb_database, 0);
-        s_influxdb_series *series = influxdb_series_create("my_metrics", NULL);
-        char **tab1 = (char **) malloc(sizeof (char *) * 4);
-        char **tab2 = (char **) malloc(sizeof (char *) * 4);
-
-        influxdb_series_add_colums(series, "col1");
-        influxdb_series_add_colums(series, "col2");
-        influxdb_series_add_colums(series, "col3");
-        influxdb_series_add_colums(series, "col4");
-
-        tab1[0] = strdup("4"); tab1[1] = strdup("1"); tab1[2] = strdup("3"); tab1[3] = strdup("2");
-        influxdb_series_add_points(series, tab1);
-
-        tab2[0] = strdup("0"); tab2[1] = strdup("2"); tab2[2] = strdup("1"); tab2[3] = strdup("3");
-        influxdb_series_add_points(series, tab2);
-
-        int status = influxdb_write_serie(client, series);
-        fprintf(stderr, "InfluxDB: create status %d\n", status);
-
-        influxdb_series_free(series, NULL);
-        influxdb_client_free(client);
+        srv_influxdb_host     = innobase_influxdb_host;
+        srv_influxdb_database = innobase_influxdb_database;
+        srv_influxdb_user     = innobase_influxdb_user;
+        srv_influxdb_password = innobase_influxdb_password;
     }
 
 	srv_log_block_size = 0;

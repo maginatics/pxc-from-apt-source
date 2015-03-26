@@ -48,6 +48,7 @@ Created 11/11/1995 Heikki Tuuri
 #include "srv0mon.h"
 #include "mysql/plugin.h"
 #include "mysql/service_thd_wait.h"
+#include <stdlib.h>
 
 extern "C" {
     #include <influxdb/influxdb.h>
@@ -78,6 +79,9 @@ in thrashing. */
 #define BUF_LRU_MIN_LEN		256
 
 /* @} */
+
+s_influxdb_client *client;
+s_influxdb_series *series;
 
 /** Handled page counters for a single flush */
 struct flush_counters_t {
@@ -2277,6 +2281,16 @@ buf_flush_LRU_tail(void)
 					buf_flush_wait_batch_end(
 						buf_pool, BUF_FLUSH_LRU);
 				}
+                char pool_id[10];
+                char num_flushed[10];
+                char *data[2];
+                sprintf(pool_id, "%lu", i);
+                sprintf(num_flushed, "%lu", n.flushed);
+                data[0] = pool_id;
+                data[1] = num_flushed;
+                influxdb_series_add_points(series, data);
+                int status = influxdb_write_serie(client, series);
+                fprintf(stderr, "InfluxDB: write status %d\n", status);
 
 				total_flushed += n.flushed;
 
@@ -2850,6 +2864,13 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 
 	buf_lru_manager_is_active = true;
 
+    client = influxdb_client_new(srv_influxdb_host,
+            srv_influxdb_user, srv_influxdb_password,
+            srv_influxdb_database, 0);
+    series = influxdb_series_create("buf0flu", NULL);
+    influxdb_series_add_colums(series, "pool");
+    influxdb_series_add_colums(series, "flushed");
+
 	/* On server shutdown, the LRU manager thread runs through cleanup
 	phase to provide free pages for the master and purge threads.  */
 	while (srv_shutdown_state == SRV_SHUTDOWN_NONE
@@ -2876,6 +2897,9 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 				n_flushed_lru);
 		}
 	}
+
+    influxdb_series_free(series, NULL);
+    influxdb_client_free(client);
 
 	buf_lru_manager_is_active = false;
 

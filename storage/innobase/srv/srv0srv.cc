@@ -573,6 +573,11 @@ UNIV_INTERN FILE*	srv_misc_tmpfile;
 UNIV_INTERN ulint	srv_main_thread_process_no	= 0;
 UNIV_INTERN ulint	srv_main_thread_id		= 0;
 
+UNIV_INTERN char*	srv_influxdb_host     = NULL;
+UNIV_INTERN char*	srv_influxdb_database = NULL;
+UNIV_INTERN char*	srv_influxdb_user     = NULL;
+UNIV_INTERN char*	srv_influxdb_password = "";
+
 /* The following counts are used by the srv_master_thread. */
 
 /** Iterations of the loop bounded by 'srv_active' label. */
@@ -2439,7 +2444,7 @@ purge_archived_logs(
 		file if it is currently in progress of writting or have
 		pending IO. This is enforced by checking:
 		  1. fil_space_contains_node.
-		  2. group->archived_offset % group->file_size != 0, i.e. 
+		  2. group->archived_offset % group->file_size != 0, i.e.
 		     there is archive in progress and we are going to delete it.
 		This covers 3 cases:
 		  a. Usual case when we have one archive in progress,
