@@ -2933,10 +2933,6 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 		}
 	}
 
-    influxdb_series_free(influxdb_aggregate_series, NULL);
-    influxdb_series_free(influxdb_page_level_series, NULL);
-    influxdb_client_free(client);
-
 	buf_lru_manager_is_active = false;
 
 	/* We count the number of threads in os_thread_exit(). A created
