@@ -2235,6 +2235,13 @@ buf_flush_LRU_tail(void)
 	ulint	lru_chunk_size = srv_cleaner_lru_chunk_size;
 	ulint	free_list_lwm = srv_LRU_scan_depth / 100
 		* srv_cleaner_free_list_lwm;
+    char pool_id[10];
+    char num_flushed[10];
+    char num_evicted[10];
+    char *influx_data[2];
+    influx_data[0] = pool_id;
+    influx_data[1] = num_flushed;
+    influx_data[2] = num_evicted;
 
 	for (ulint i = 0; i < srv_buf_pool_instances; i++) {
 
@@ -2281,16 +2288,17 @@ buf_flush_LRU_tail(void)
 					buf_flush_wait_batch_end(
 						buf_pool, BUF_FLUSH_LRU);
 				}
-                char pool_id[10];
-                char num_flushed[10];
-                char *data[2];
-                sprintf(pool_id, "%lu", i);
-                sprintf(num_flushed, "%lu", n.flushed);
-                data[0] = pool_id;
-                data[1] = num_flushed;
-                influxdb_series_add_points(series, data);
-                int status = influxdb_write_serie(client, series);
-                fprintf(stderr, "InfluxDB: write status %d\n", status);
+
+                if (n.flushed > 0 || n.evicted > 0) {
+                    sprintf(pool_id, "%lu", i);
+                    sprintf(num_flushed, "%lu", n.flushed);
+                    sprintf(num_evicted, "%lu", n.evicted);
+                    influxdb_series_add_points(series, influx_data);
+                    int status = influxdb_write_serie(client, series);
+                    if (status != 200) {
+                        fprintf(stderr, "InfluxDB: write failed with %d\n", status);
+                    }
+                }
 
 				total_flushed += n.flushed;
 
@@ -2870,6 +2878,7 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
     series = influxdb_series_create("buf0flu", NULL);
     influxdb_series_add_colums(series, "pool");
     influxdb_series_add_colums(series, "flushed");
+    influxdb_series_add_colums(series, "evicted");
 
 	/* On server shutdown, the LRU manager thread runs through cleanup
 	phase to provide free pages for the master and purge threads.  */
